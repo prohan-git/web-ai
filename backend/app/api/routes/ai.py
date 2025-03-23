@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from app.models.api_models import (ChatRequest, ChatResponse, CompetitionAnalysisRequest, ContentIdeasRequest, CreatorAnalysisRequest, DataAnalysisRequest)
 from app.models.api_models import(InspirationRequest, ListingGenerationRequest, ProductPotentialRequest, ProductSearchRequest, SentimentMonitorRequest)
 from app.models.api_models import(SimilarCreatorsRequest, SocialDataRequest, SupplierSearchRequest, TaskRequest, TaskResponse, TemplateTaskRequest, TrendingContentRequest)
+from app.models.api_models import StatusEnum, BaseResponse, DataResponse
 from ...core.ai_agent.chat_agent import ChatAgent
 from ...core.ai_agent.task_agent import TaskAgent
 from ...core.ai_agent.social_agent import SocialAgent
@@ -37,7 +38,7 @@ async def chat_with_ai(request: ChatRequest):
             session_id=request.session_id
         )
         logger.info(f"Chat API 成功处理消息，session_id: {request.session_id}")
-        return ChatResponse(response=response)
+        return ChatResponse(status=StatusEnum.SUCCESS, message="聊天成功", response=response)
     except Exception as e:
         logger.error(f"Chat API错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -52,7 +53,19 @@ async def execute_task(request: TaskRequest, req: Request):
             task=request.task,
             use_vision=request.use_vision
         )
-        return TaskResponse(**result)
+        if isinstance(result, dict) and "status" in result and "message" in result:
+            # 确保响应字段一致性
+            result["status"] = StatusEnum.SUCCESS if result["status"] == "success" else StatusEnum.ERROR
+            return TaskResponse(**result)
+        else:
+            # 处理不符合预期的返回值
+            return TaskResponse(
+                status=StatusEnum.SUCCESS,
+                message="任务执行成功",
+                task=request.task,
+                use_vision=request.use_vision,
+                result=str(result) if result else None
+            )
     except Exception as e:
         # 记录详细错误日志
         logger.error(f"Task API错误 - {req.url.path}: {str(e)}")
@@ -72,10 +85,23 @@ async def execute_template_task(request: TemplateTaskRequest):
     try:
         result = await TaskAgent.execute_template_task(
             template_name=request.template_name,
+            parameters=request.parameters,
             use_vision=request.use_vision,
-            **request.template_params
+            system_prompt_extension=request.system_prompt_extension
         )
-        return TaskResponse(**result)
+        if isinstance(result, dict) and "status" in result and "message" in result:
+            # 确保响应字段一致性
+            result["status"] = StatusEnum.SUCCESS if result["status"] == "success" else StatusEnum.ERROR
+            return TaskResponse(**result)
+        else:
+            # 处理不符合预期的返回值
+            return TaskResponse(
+                status=StatusEnum.SUCCESS,
+                message="模板任务执行成功",
+                task=request.template_name,
+                use_vision=request.use_vision,
+                result=str(result) if result else None
+            )
     except ValueError as e:
         logger.error(f"模板任务错误: {str(e)}")
         raise HTTPException(
@@ -96,7 +122,7 @@ async def execute_template_task(request: TemplateTaskRequest):
         )
 
 # 社交媒体API
-@router.post("/social/collect", response_model=Dict[str, Any])
+@router.post("/social/collect", response_model=DataResponse)
 async def collect_social_data(request: SocialDataRequest):
     """
     从社交媒体平台收集数据
@@ -108,7 +134,11 @@ async def collect_social_data(request: SocialDataRequest):
             use_vision=request.use_vision,
             **request.params
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"成功从{request.platform}收集数据",
+            data=result
+        )
     except Exception as e:
         logger.error(f"社交数据收集错误: {str(e)}")
         raise HTTPException(
@@ -119,7 +149,7 @@ async def collect_social_data(request: SocialDataRequest):
             }
         )
 
-@router.post("/social/monitor", response_model=Dict[str, Any])
+@router.post("/social/monitor", response_model=DataResponse)
 async def monitor_sentiment(request: SentimentMonitorRequest):
     """
     监控社交媒体平台的舆情
@@ -129,7 +159,11 @@ async def monitor_sentiment(request: SentimentMonitorRequest):
             keywords=request.keywords,
             platforms=request.platforms
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message="舆情监控完成",
+            data=result
+        )
     except Exception as e:
         logger.error(f"舆情监控错误: {str(e)}")
         raise HTTPException(
@@ -140,7 +174,7 @@ async def monitor_sentiment(request: SentimentMonitorRequest):
             }
         )
 
-@router.post("/social/analyze", response_model=Dict[str, Any])
+@router.post("/social/analyze", response_model=DataResponse)
 async def analyze_data(request: DataAnalysisRequest):
     """
     分析收集到的数据
@@ -150,7 +184,11 @@ async def analyze_data(request: DataAnalysisRequest):
             data=request.data,
             analysis_type=request.analysis_type
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message="数据分析完成",
+            data=result
+        )
     except Exception as e:
         logger.error(f"数据分析错误: {str(e)}")
         raise HTTPException(
@@ -161,10 +199,10 @@ async def analyze_data(request: DataAnalysisRequest):
             }
         )
 
-@router.post("/social/trending", response_model=Dict[str, Any])
+@router.post("/social/trending", response_model=DataResponse)
 async def find_trending_content(request: TrendingContentRequest):
     """
-    查找某领域的热门/趋势内容
+    查找热门内容
     """
     try:
         result = await SocialAgent.find_trending_content(
@@ -174,7 +212,11 @@ async def find_trending_content(request: TrendingContentRequest):
             time_period=request.time_period,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已找到{request.platform}平台的热门{request.niche}内容",
+            data=result
+        )
     except Exception as e:
         logger.error(f"查找热门内容错误: {str(e)}")
         raise HTTPException(
@@ -185,7 +227,7 @@ async def find_trending_content(request: TrendingContentRequest):
             }
         )
 
-@router.post("/social/similar-creators", response_model=Dict[str, Any])
+@router.post("/social/similar-creators", response_model=DataResponse)
 async def find_similar_creators(request: SimilarCreatorsRequest):
     """
     查找相似创作者
@@ -197,7 +239,11 @@ async def find_similar_creators(request: SimilarCreatorsRequest):
             count=request.count,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已找到与{request.creator}相似的创作者",
+            data=result
+        )
     except Exception as e:
         logger.error(f"查找相似创作者错误: {str(e)}")
         raise HTTPException(
@@ -208,10 +254,10 @@ async def find_similar_creators(request: SimilarCreatorsRequest):
             }
         )
 
-@router.post("/social/content-ideas", response_model=Dict[str, Any])
+@router.post("/social/content-ideas", response_model=DataResponse)
 async def generate_content_ideas(request: ContentIdeasRequest):
     """
-    生成内容创作灵感
+    生成内容创意
     """
     try:
         result = await SocialAgent.generate_content_ideas(
@@ -220,43 +266,51 @@ async def generate_content_ideas(request: ContentIdeasRequest):
             keywords=request.keywords,
             count=request.count
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已为{request.platform}平台生成{request.niche}领域的内容创意",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"生成内容灵感错误: {str(e)}")
+        logger.error(f"生成内容创意错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "生成内容灵感失败",
+                "message": "生成内容创意失败",
                 "error": str(e)
             }
         )
 
-@router.post("/social/creator-analysis", response_model=Dict[str, Any])
+@router.post("/social/creator-analysis", response_model=DataResponse)
 async def analyze_creator(request: CreatorAnalysisRequest):
     """
-    分析创作者增长数据
+    分析创作者
     """
     try:
-        result = await SocialAgent.analyze_creator_growth(
+        result = await SocialAgent.analyze_creator(
             platform=request.platform,
             creator=request.creator,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已完成对{request.platform}平台创作者{request.creator}的分析",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"创作者分析错误: {str(e)}")
+        logger.error(f"分析创作者错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "创作者分析失败",
+                "message": "分析创作者失败",
                 "error": str(e)
             }
         )
 
-@router.post("/social/inspiration", response_model=Dict[str, Any])
+@router.post("/social/inspiration", response_model=DataResponse)
 async def collect_inspiration(request: InspirationRequest):
     """
-    从多个平台收集创意灵感
+    收集灵感素材
     """
     try:
         result = await SocialAgent.collect_inspiration(
@@ -265,22 +319,26 @@ async def collect_inspiration(request: InspirationRequest):
             count_per_source=request.count_per_source,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message="灵感素材收集完成",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"收集灵感错误: {str(e)}")
+        logger.error(f"收集灵感素材错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "收集灵感失败",
+                "message": "收集灵感素材失败",
                 "error": str(e)
             }
         )
 
 # 电商API
-@router.post("/ecommerce/products", response_model=Dict[str, Any])
+@router.post("/ecommerce/products", response_model=DataResponse)
 async def search_products(request: ProductSearchRequest):
     """
-    在电商平台搜索产品
+    搜索产品
     """
     try:
         result = await EcommerceAgent.search_products(
@@ -289,42 +347,52 @@ async def search_products(request: ProductSearchRequest):
             use_vision=request.use_vision,
             **request.params
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"在{request.platform}平台搜索产品完成",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"产品搜索错误: {str(e)}")
+        logger.error(f"搜索产品错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "产品搜索失败",
+                "message": "搜索产品失败",
                 "error": str(e)
             }
         )
 
-@router.post("/ecommerce/listing", response_model=Dict[str, Any])
+@router.post("/ecommerce/listing", response_model=DataResponse)
 async def generate_listing(request: ListingGenerationRequest):
     """
-    生成电商上货素材
+    生成产品listing
     """
     try:
-        # 构建参数字典，排除None值
-        params = {k: v for k, v in request.dict().items() if v is not None and k != "template_type"}
-        
         result = await EcommerceAgent.generate_listing(
             template_type=request.template_type,
-            **params
+            product=request.product,
+            features=request.features,
+            platform=request.platform,
+            description=request.description,
+            cost=request.cost,
+            competitor_prices=request.competitor_prices
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已为产品{request.product}生成listing",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"生成上货素材错误: {str(e)}")
+        logger.error(f"生成listing错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "生成上货素材失败",
+                "message": "生成listing失败",
                 "error": str(e)
             }
         )
 
-@router.post("/ecommerce/product-potential", response_model=Dict[str, Any])
+@router.post("/ecommerce/product-potential", response_model=DataResponse)
 async def analyze_product_potential(request: ProductPotentialRequest):
     """
     分析产品潜力
@@ -336,21 +404,25 @@ async def analyze_product_potential(request: ProductPotentialRequest):
             platform=request.platform,
             dimensions=request.dimensions
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已完成对{request.niche}领域产品的潜力分析",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"产品潜力分析错误: {str(e)}")
+        logger.error(f"分析产品潜力错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "产品潜力分析失败",
+                "message": "分析产品潜力失败",
                 "error": str(e)
             }
         )
 
-@router.post("/ecommerce/competition", response_model=Dict[str, Any])
+@router.post("/ecommerce/competition", response_model=DataResponse)
 async def analyze_competition(request: CompetitionAnalysisRequest):
     """
-    分析竞品情况
+    分析竞争情况
     """
     try:
         result = await EcommerceAgent.analyze_competition(
@@ -358,21 +430,25 @@ async def analyze_competition(request: CompetitionAnalysisRequest):
             platform=request.platform,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已完成{request.platform}平台关于{request.product_keyword}的竞争分析",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"竞品分析错误: {str(e)}")
+        logger.error(f"分析竞争情况错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "竞品分析失败",
+                "message": "分析竞争情况失败",
                 "error": str(e)
             }
         )
 
-@router.post("/ecommerce/suppliers", response_model=Dict[str, Any])
+@router.post("/ecommerce/suppliers", response_model=DataResponse)
 async def find_suppliers(request: SupplierSearchRequest):
     """
-    查找产品供应商
+    查找供应商
     """
     try:
         result = await EcommerceAgent.find_suppliers(
@@ -380,13 +456,17 @@ async def find_suppliers(request: SupplierSearchRequest):
             count=request.count,
             use_vision=request.use_vision
         )
-        return result
+        return DataResponse(
+            status=StatusEnum.SUCCESS,
+            message=f"已找到{request.product}的供应商信息",
+            data=result
+        )
     except Exception as e:
-        logger.error(f"供应商查找错误: {str(e)}")
+        logger.error(f"查找供应商错误: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail={
-                "message": "供应商查找失败",
+                "message": "查找供应商失败",
                 "error": str(e)
             }
         )
