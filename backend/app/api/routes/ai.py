@@ -1,15 +1,13 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends, Body, Query
 from pydantic import BaseModel
 from app.models.api_models import (ChatRequest, ChatResponse, CompetitionAnalysisRequest, ContentIdeasRequest, CreatorAnalysisRequest, DataAnalysisRequest)
 from app.models.api_models import(InspirationRequest, ListingGenerationRequest, ProductPotentialRequest, ProductSearchRequest, SentimentMonitorRequest)
 from app.models.api_models import(SimilarCreatorsRequest, SocialDataRequest, SupplierSearchRequest, TaskRequest, TaskResponse, TemplateTaskRequest, TrendingContentRequest)
 from app.models.api_models import StatusEnum, BaseResponse, DataResponse
-from ...core.ai_agent.chat_agent import ChatAgent
-from ...core.ai_agent.task_agent import TaskAgent
-from ...core.ai_agent.social_agent import SocialAgent
-from ...core.ai_agent.ecommerce_agent import EcommerceAgent
+from ..dependencies.ai_dependencies import AIService, get_ai_service
 from typing import Optional, List, Dict, Any
 import logging
+from ...core.agents.chat.chat_agent import ChatAgent
 
 # 配置日志
 logging.basicConfig(
@@ -27,68 +25,52 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat_with_ai(request: ChatRequest):
+@router.post("/chat", response_model=BaseResponse)
+async def chat(
+    request: ChatRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
-    基础对话接口
+    与AI聊天
     """
     try:
-        response = await ChatAgent.chat(
-            message=request.message,
-            session_id=request.session_id
-        )
-        logger.info(f"Chat API 成功处理消息，session_id: {request.session_id}")
-        return ChatResponse(status=StatusEnum.SUCCESS, message="聊天成功", response=response)
+        # 使用AIService中的chat方法
+        result = await ai_service.chat(request.message, request.session_id)
+        return result
     except Exception as e:
-        logger.error(f"Chat API错误: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"聊天处理错误: {str(e)}")
 
-@router.post("/task", response_model=TaskResponse)
-async def execute_task(request: TaskRequest, req: Request):
+@router.post("/task", response_model=BaseResponse)
+async def execute_task(
+    request: TaskRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
-    执行特定任务接口
+    执行通用任务
     """
     try:
-        result = await TaskAgent.execute_task(
-            task=request.task,
-            use_vision=request.use_vision
-        )
-        if isinstance(result, dict) and "status" in result and "message" in result:
-            # 确保响应字段一致性
-            result["status"] = StatusEnum.SUCCESS if result["status"] == "success" else StatusEnum.ERROR
-            return TaskResponse(**result)
-        else:
-            # 处理不符合预期的返回值
-            return TaskResponse(
-                status=StatusEnum.SUCCESS,
-                message="任务执行成功",
-                task=request.task,
-                use_vision=request.use_vision,
-                result=str(result) if result else None
-            )
+        result = await ai_service.execute_task(request.task, request.use_vision)
+        return result
     except Exception as e:
-        # 记录详细错误日志
-        logger.error(f"Task API错误 - {req.url.path}: {str(e)}")
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "任务执行失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"任务执行错误: {str(e)}")
 
 @router.post("/task/template", response_model=TaskResponse)
-async def execute_template_task(request: TemplateTaskRequest):
+async def execute_template_task(
+    request: TemplateTaskRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     使用预定义模板执行任务
     """
     try:
-        result = await TaskAgent.execute_template_task(
+        # 使用AIService执行模板任务
+        result = await ai_service.execute_template_task(
             template_name=request.template_name,
             parameters=request.parameters,
             use_vision=request.use_vision,
             system_prompt_extension=request.system_prompt_extension
         )
+        
         if isinstance(result, dict) and "status" in result and "message" in result:
             # 确保响应字段一致性
             result["status"] = StatusEnum.SUCCESS if result["status"] == "success" else StatusEnum.ERROR
@@ -122,145 +104,109 @@ async def execute_template_task(request: TemplateTaskRequest):
         )
 
 # 社交媒体API
-@router.post("/social/collect", response_model=DataResponse)
-async def collect_social_data(request: SocialDataRequest):
+@router.post("/social/collect", response_model=BaseResponse)
+async def collect_social_data(
+    request: SocialDataRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
     从社交媒体平台收集数据
     """
     try:
-        result = await SocialAgent.collect_from_platform(
+        # 调用AIService收集社交数据
+        result = await ai_service.collect_social_data(
             platform=request.platform,
             task_type=request.task_type,
             use_vision=request.use_vision,
             **request.params
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message=f"成功从{request.platform}收集数据",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"社交数据收集错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "社交数据收集失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"社交数据收集错误: {str(e)}")
 
-@router.post("/social/monitor", response_model=DataResponse)
-async def monitor_sentiment(request: SentimentMonitorRequest):
+@router.post("/social/monitor", response_model=BaseResponse)
+async def monitor_sentiment(
+    request: SentimentMonitorRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
-    监控社交媒体平台的舆情
+    监控社交媒体舆情
     """
     try:
-        result = await SocialAgent.monitor_sentiment(
+        result = await ai_service.monitor_sentiment(
             keywords=request.keywords,
             platforms=request.platforms
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message="舆情监控完成",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"舆情监控错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "舆情监控失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"舆情监控错误: {str(e)}")
 
-@router.post("/social/analyze", response_model=DataResponse)
-async def analyze_data(request: DataAnalysisRequest):
+@router.post("/social/analyze", response_model=BaseResponse)
+async def analyze_social_data(
+    request: DataAnalysisRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
-    分析收集到的数据
+    分析社交媒体数据
     """
     try:
-        result = await SocialAgent.analyze_data(
+        result = await ai_service.analyze_social_data(
             data=request.data,
             analysis_type=request.analysis_type
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message="数据分析完成",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"数据分析错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "数据分析失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"社交数据分析错误: {str(e)}")
 
-@router.post("/social/trending", response_model=DataResponse)
-async def find_trending_content(request: TrendingContentRequest):
+@router.post("/social/trending", response_model=BaseResponse)
+async def find_trending_content(
+    request: TrendingContentRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
     查找热门内容
     """
     try:
-        result = await SocialAgent.find_trending_content(
+        result = await ai_service.find_trending_content(
             platform=request.platform,
             niche=request.niche,
             count=request.count,
             time_period=request.time_period,
             use_vision=request.use_vision
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message=f"已找到{request.platform}平台的热门{request.niche}内容",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"查找热门内容错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "查找热门内容失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"查找热门内容错误: {str(e)}")
 
-@router.post("/social/similar-creators", response_model=DataResponse)
-async def find_similar_creators(request: SimilarCreatorsRequest):
+@router.post("/social/similar-creators", response_model=BaseResponse)
+async def find_similar_creators(
+    request: SimilarCreatorsRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
     查找相似创作者
     """
     try:
-        result = await SocialAgent.find_similar_creators(
+        result = await ai_service.find_similar_creators(
             platform=request.platform,
             creator=request.creator,
             count=request.count,
             use_vision=request.use_vision
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message=f"已找到与{request.creator}相似的创作者",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"查找相似创作者错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "查找相似创作者失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"查找相似创作者错误: {str(e)}")
 
 @router.post("/social/content-ideas", response_model=DataResponse)
-async def generate_content_ideas(request: ContentIdeasRequest):
+async def generate_content_ideas(
+    request: ContentIdeasRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     生成内容创意
     """
     try:
-        result = await SocialAgent.generate_content_ideas(
+        result = await ai_service.generate_content_ideas(
             platform=request.platform,
             niche=request.niche,
             keywords=request.keywords,
@@ -282,12 +228,15 @@ async def generate_content_ideas(request: ContentIdeasRequest):
         )
 
 @router.post("/social/creator-analysis", response_model=DataResponse)
-async def analyze_creator(request: CreatorAnalysisRequest):
+async def analyze_creator(
+    request: CreatorAnalysisRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     分析创作者
     """
     try:
-        result = await SocialAgent.analyze_creator(
+        result = await ai_service.analyze_creator(
             platform=request.platform,
             creator=request.creator,
             use_vision=request.use_vision
@@ -308,12 +257,15 @@ async def analyze_creator(request: CreatorAnalysisRequest):
         )
 
 @router.post("/social/inspiration", response_model=DataResponse)
-async def collect_inspiration(request: InspirationRequest):
+async def collect_inspiration(
+    request: InspirationRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     收集灵感素材
     """
     try:
-        result = await SocialAgent.collect_inspiration(
+        result = await ai_service.collect_inspiration(
             keywords=request.keywords,
             sources=request.sources,
             count_per_source=request.count_per_source,
@@ -335,40 +287,35 @@ async def collect_inspiration(request: InspirationRequest):
         )
 
 # 电商API
-@router.post("/ecommerce/products", response_model=DataResponse)
-async def search_products(request: ProductSearchRequest):
+@router.post("/ecommerce/products", response_model=BaseResponse)
+async def search_products(
+    request: ProductSearchRequest = Body(...),
+    ai_service: AIService = Depends(get_ai_service)
+) -> Dict[str, Any]:
     """
-    搜索产品
+    搜索电商产品
     """
     try:
-        result = await EcommerceAgent.search_products(
+        result = await ai_service.search_products(
             platform=request.platform,
             task_type=request.task_type,
             use_vision=request.use_vision,
             **request.params
         )
-        return DataResponse(
-            status=StatusEnum.SUCCESS,
-            message=f"在{request.platform}平台搜索产品完成",
-            data=result
-        )
+        return result
     except Exception as e:
-        logger.error(f"搜索产品错误: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "搜索产品失败",
-                "error": str(e)
-            }
-        )
+        raise HTTPException(status_code=500, detail=f"产品搜索错误: {str(e)}")
 
 @router.post("/ecommerce/listing", response_model=DataResponse)
-async def generate_listing(request: ListingGenerationRequest):
+async def generate_listing(
+    request: ListingGenerationRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     生成产品listing
     """
     try:
-        result = await EcommerceAgent.generate_listing(
+        result = await ai_service.generate_listing(
             template_type=request.template_type,
             product=request.product,
             features=request.features,
@@ -393,12 +340,15 @@ async def generate_listing(request: ListingGenerationRequest):
         )
 
 @router.post("/ecommerce/product-potential", response_model=DataResponse)
-async def analyze_product_potential(request: ProductPotentialRequest):
+async def analyze_product_potential(
+    request: ProductPotentialRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     分析产品潜力
     """
     try:
-        result = await EcommerceAgent.analyze_product_potential(
+        result = await ai_service.analyze_product_potential(
             product_info=request.product_info,
             niche=request.niche,
             platform=request.platform,
@@ -420,12 +370,15 @@ async def analyze_product_potential(request: ProductPotentialRequest):
         )
 
 @router.post("/ecommerce/competition", response_model=DataResponse)
-async def analyze_competition(request: CompetitionAnalysisRequest):
+async def analyze_competition(
+    request: CompetitionAnalysisRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     分析竞争情况
     """
     try:
-        result = await EcommerceAgent.analyze_competition(
+        result = await ai_service.analyze_competition(
             product_keyword=request.product_keyword,
             platform=request.platform,
             use_vision=request.use_vision
@@ -446,12 +399,15 @@ async def analyze_competition(request: CompetitionAnalysisRequest):
         )
 
 @router.post("/ecommerce/suppliers", response_model=DataResponse)
-async def find_suppliers(request: SupplierSearchRequest):
+async def find_suppliers(
+    request: SupplierSearchRequest,
+    ai_service: AIService = Depends(get_ai_service)
+):
     """
     查找供应商
     """
     try:
-        result = await EcommerceAgent.find_suppliers(
+        result = await ai_service.find_suppliers(
             product=request.product,
             count=request.count,
             use_vision=request.use_vision
