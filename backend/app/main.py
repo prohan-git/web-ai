@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Callable
 
 # 导入路由模块
-from .api.routes import ai, chain
+from .api.routes import ai
 from .models.api_models import StatusEnum
 from .config.config_manager import ConfigManager
 
@@ -99,7 +99,6 @@ def create_app() -> FastAPI:
     
     # 注册路由
     app.include_router(ai.router, prefix=api_config["api_v1_str"])
-    app.include_router(chain.router, prefix=api_config["api_v1_str"])
     
     return app
 

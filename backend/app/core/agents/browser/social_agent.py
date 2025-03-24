@@ -15,6 +15,36 @@ class SocialAgent(BrowserTaskAgent):
     """
     
     @classmethod
+    async def execute_social_task(
+        cls,
+        platform: str,
+        task_type: str,
+        parameters: Dict[str, Any] = None,
+        use_vision: bool = True
+    ) -> Dict[str, Any]:
+        """
+        执行社交媒体相关任务的便捷方法
+        
+        自动设置TemplateCategory为SOCIAL，简化调用
+        
+        Args:
+            platform: 平台名称
+            task_type: 任务类型
+            parameters: 任务参数
+            use_vision: 是否使用视觉能力
+            
+        Returns:
+            任务执行结果
+        """
+        return await cls.execute_category_task(
+            category=TemplateCategory.SOCIAL,
+            platform=platform,
+            task_type=task_type,
+            parameters=parameters or {},
+            use_vision=use_vision
+        )
+    
+    @classmethod
     async def collect_from_platform(
         cls, 
         platform: str, 
@@ -51,8 +81,7 @@ class SocialAgent(BrowserTaskAgent):
             
         try:
             # 执行任务
-            result = await cls.execute_category_task(
-                category=TemplateCategory.SOCIAL,
+            result = await cls.execute_social_task(
                 platform=platform,
                 task_type=task_type,
                 parameters=params,
@@ -115,7 +144,12 @@ class SocialAgent(BrowserTaskAgent):
                 """
                 
                 # 执行任务
-                result = await cls.execute_task(task, use_vision=True)
+                result = await cls.execute_social_task(
+                    platform=platform,
+                    task_type="sentiment",
+                    parameters={"keywords": keywords},
+                    use_vision=True
+                )
                 
                 if result["status"] == "success":
                     results[platform] = result["result"]
@@ -179,7 +213,12 @@ class SocialAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=False)
+            result = await cls.execute_social_task(
+                platform="",
+                task_type=analysis_type,
+                parameters={"data": data},
+                use_vision=False
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -238,7 +277,12 @@ class SocialAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_social_task(
+                platform=platform,
+                task_type="trending_content",
+                parameters={"niche": niche, "count": count, "time_period": time_period},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -304,7 +348,12 @@ class SocialAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_social_task(
+                platform=platform,
+                task_type="similar_creators",
+                parameters={"creator": creator, "count": count},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -366,7 +415,12 @@ class SocialAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=False)
+            result = await cls.execute_social_task(
+                platform=platform,
+                task_type="content_ideas",
+                parameters={"niche": niche, "keywords": keywords, "count": count},
+                use_vision=False
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -426,7 +480,12 @@ class SocialAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_social_task(
+                platform=platform,
+                task_type="creator_analysis",
+                parameters={"creator": creator},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -484,7 +543,12 @@ class SocialAgent(BrowserTaskAgent):
                 """
                 
                 # 执行任务
-                result = await cls.execute_task(task, use_vision=use_vision)
+                result = await cls.execute_social_task(
+                    platform=source,
+                    task_type="inspiration",
+                    parameters={"keywords": keywords, "count_per_source": count_per_source},
+                    use_vision=use_vision
+                )
                 
                 if result["status"] == "success":
                     results[source] = result["result"]

@@ -217,7 +217,7 @@ class BrowserTaskAgent:
         system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        执行基于模板的任务
+        执行基于通用模板的任务
         
         Args:
             template_name: 模板名称
@@ -262,86 +262,4 @@ class BrowserTaskAgent:
             logger.error(f"执行模板任务失败: {str(e)}")
             return cls.format_error_response(f"执行模板任务失败: {str(e)}")
     
-    @classmethod
-    async def execute_category_task(
-        cls,
-        category: str,
-        platform: str,
-        task_type: str,
-        parameters: Dict[str, Any],
-        use_vision: bool = True,
-        temperature: float = 0.7,
-        model_name: Optional[str] = None,
-        system_prompt: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        执行特定类别和平台的任务
-        
-        Args:
-            category: 任务类别
-            platform: 平台名称
-            task_type: 任务类型
-            parameters: 任务参数
-            use_vision: 是否使用视觉能力
-            temperature: 温度参数
-            model_name: 模型名称
-            system_prompt: 系统提示
-            
-        Returns:
-            包含任务执行结果的字典
-        """
-        try:
-            # 获取模板
-            if category == "SOCIAL":
-                template = TemplateManager.get_social_platform_template(platform, task_type)
-            elif category == "ECOMMERCE":
-                template = TemplateManager.get_ecommerce_platform_template(platform, task_type)
-            elif category == "CONTENT_ANALYSIS":
-                template = TemplateManager.get_content_analysis_template(task_type)
-            elif category == "ECOMMERCE_ANALYSIS":
-                template = TemplateManager.get_ecommerce_analysis_template(task_type)
-            elif category == "LISTING":
-                template = TemplateManager.get_listing_template(task_type)
-            else:
-                return cls.format_error_response(
-                    f"不支持的任务类别: {category}",
-                    supported_categories=["SOCIAL", "ECOMMERCE", "CONTENT_ANALYSIS", "ECOMMERCE_ANALYSIS", "LISTING"]
-                )
-                
-            # 检查模板是否存在
-            if not template:
-                if category == "SOCIAL":
-                    supported_task_types = TemplateManager.get_platform_task_types("SOCIAL", platform)
-                    error_msg = f"{platform}平台不支持任务类型: {task_type}"
-                elif category == "ECOMMERCE":
-                    supported_task_types = TemplateManager.get_platform_task_types("ECOMMERCE", platform)
-                    error_msg = f"{platform}平台不支持任务类型: {task_type}"
-                else:
-                    supported_task_types = []
-                    error_msg = f"不支持的任务类型: {task_type}"
-                    
-                return cls.format_error_response(
-                    error_msg,
-                    supported_task_types=supported_task_types
-                )
-                
-            # 渲染模板
-            try:
-                task = TemplateManager.render_template(template, parameters)
-            except KeyError as e:
-                return cls.format_error_response(
-                    f"任务参数错误: 缺少参数 {str(e)}",
-                    required_parameters=list(parameters.keys())
-                )
-                
-            # 执行任务
-            return await cls.execute_task(
-                task=task,
-                use_vision=use_vision,
-                temperature=temperature,
-                model_name=model_name,
-                system_prompt=system_prompt
-            )
-        except Exception as e:
-            logger.error(f"执行类别任务失败: {str(e)}")
-            return cls.format_error_response(f"执行类别任务失败: {str(e)}") 
+     

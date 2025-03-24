@@ -71,31 +71,43 @@ def get_chat_agent() -> ChatAgent:
     return AgentFactory.get_chat_agent()
 
 
-class AIService:
+class BaseAIService:
     """
-    AI服务类，提供统一的AI服务接口
-    
-    使用依赖注入方式获取所需的代理实例
+    AI服务基类，提供共享的基础功能
     """
-    
+    def __init__(self, llm: ChatOpenAI = Depends(get_llm)):
+        self.llm = llm
+
+
+class ChatAIService(BaseAIService):
+    """
+    聊天AI服务类，提供聊天相关功能
+    """
     def __init__(
         self,
-        social_agent: SocialAgent = Depends(get_social_agent),
-        ecommerce_agent: EcommerceAgent = Depends(get_ecommerce_agent),
         chat_agent: ChatAgent = Depends(get_chat_agent),
         llm: ChatOpenAI = Depends(get_llm)
     ):
-        self.social_agent = social_agent
-        self.ecommerce_agent = ecommerce_agent
+        super().__init__(llm)
         self.chat_agent = chat_agent
-        self.llm = llm
     
-    # 聊天相关方法
     async def chat(self, message: str, session_id: str = "default") -> Dict[str, Any]:
         """处理聊天消息"""
         return await self.chat_agent.process_message(message, session_id)
+
+
+class SocialAIService(BaseAIService):
+    """
+    社交媒体AI服务类，提供社交媒体相关功能
+    """
+    def __init__(
+        self,
+        social_agent: SocialAgent = Depends(get_social_agent),
+        llm: ChatOpenAI = Depends(get_llm)
+    ):
+        super().__init__(llm)
+        self.social_agent = social_agent
     
-    # 通用任务方法
     async def execute_task(self, task: str, use_vision: bool = False) -> Dict[str, Any]:
         """执行通用任务"""
         return await self.social_agent.execute_task(task, use_vision)
@@ -115,12 +127,32 @@ class AIService:
             system_prompt_extension=system_prompt_extension
         )
     
-    # 社交媒体相关方法
-    async def collect_social_data(
-        self, platform: str, task_type: str, use_vision: bool = True, **params
+    async def collect_from_platform(
+        self, 
+        platform: str, 
+        task_type: str, 
+        parameters: Dict[str, Any] = None,
+        use_vision: bool = True
     ) -> Dict[str, Any]:
-        """从社交媒体平台收集数据"""
-        return await self.social_agent.collect_from_platform(platform, task_type, use_vision, **params)
+        """
+        从社交媒体平台收集数据
+        
+        Args:
+            platform: 平台名称 (如 twitter, instagram, tiktok 等)
+            task_type: 任务类型 (如 search, trend, profile 等)
+            parameters: 任务参数
+            use_vision: 是否使用视觉能力
+            
+        Returns:
+            收集的数据结果
+        """
+        parameters = parameters or {}
+        return await self.social_agent.execute_social_task(
+            platform=platform,
+            task_type=task_type,
+            parameters=parameters,
+            use_vision=use_vision
+        )
     
     async def monitor_sentiment(
         self, keywords: List[str], platforms: Optional[List[str]] = None
@@ -128,7 +160,7 @@ class AIService:
         """监控社交媒体平台的舆情"""
         return await self.social_agent.monitor_sentiment(keywords, platforms)
     
-    async def analyze_social_data(
+    async def analyze_data(
         self, data: str, analysis_type: str = "sentiment"
     ) -> Dict[str, Any]:
         """分析社交媒体数据"""
@@ -175,13 +207,52 @@ class AIService:
         return await self.social_agent.collect_inspiration(
             keywords, sources, count_per_source, use_vision
         )
+
+
+class EcommerceAIService(BaseAIService):
+    """
+    电商AI服务类，提供电商相关功能
+    """
+    def __init__(
+        self,
+        ecommerce_agent: EcommerceAgent = Depends(get_ecommerce_agent),
+        llm: ChatOpenAI = Depends(get_llm)
+    ):
+        super().__init__(llm)
+        self.ecommerce_agent = ecommerce_agent
     
-    # 电商相关方法
     async def search_products(
-        self, platform: str, task_type: str, use_vision: bool = True, **params
+        self, 
+        platform: str,
+        query: str,
+        max_results: int = 10,
+        sort_by: str = "relevance",
+        use_vision: bool = True,
+        filters: Dict[str, Any] = None
     ) -> Dict[str, Any]:
-        """在电商平台搜索产品"""
-        return await self.ecommerce_agent.search_products(platform, task_type, use_vision, **params)
+        """
+        在电商平台搜索产品
+        
+        Args:
+            platform: 电商平台名称
+            query: 搜索关键词
+            max_results: 最大结果数量
+            sort_by: 排序方式 (relevance, price_low, price_high, rating, sales)
+            use_vision: 是否使用视觉能力
+            filters: 过滤条件 (如价格范围、品牌等)
+            
+        Returns:
+            包含搜索结果的字典
+        """
+        filters = filters or {}
+        return await self.ecommerce_agent.search_products(
+            platform=platform,
+            query=query,
+            max_results=max_results,
+            sort_by=sort_by,
+            use_vision=use_vision,
+            **filters
+        )
     
     async def generate_listing(
         self, template_type: str, product: str, features: List[str],
@@ -220,11 +291,26 @@ class AIService:
         )
 
 
-def get_ai_service(
-    social_agent: SocialAgent = Depends(get_social_agent),
-    ecommerce_agent: EcommerceAgent = Depends(get_ecommerce_agent),
+def get_chat_service(
     chat_agent: ChatAgent = Depends(get_chat_agent),
     llm: ChatOpenAI = Depends(get_llm)
-) -> AIService:
-    """获取AIService实例的依赖函数"""
-    return AIService(social_agent, ecommerce_agent, chat_agent, llm) 
+) -> ChatAIService:
+    """获取ChatAIService实例的依赖函数"""
+    return ChatAIService(chat_agent, llm)
+
+
+def get_social_service(
+    social_agent: SocialAgent = Depends(get_social_agent),
+    llm: ChatOpenAI = Depends(get_llm)
+) -> SocialAIService:
+    """获取SocialAIService实例的依赖函数"""
+    return SocialAIService(social_agent, llm)
+
+
+def get_ecommerce_service(
+    ecommerce_agent: EcommerceAgent = Depends(get_ecommerce_agent),
+    llm: ChatOpenAI = Depends(get_llm)
+) -> EcommerceAIService:
+    """获取EcommerceAIService实例的依赖函数"""
+    return EcommerceAIService(ecommerce_agent, llm)
+

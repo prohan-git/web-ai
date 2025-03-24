@@ -15,6 +15,7 @@ class EcommerceAgent(BrowserTaskAgent):
     负责从电子商务平台收集和分析数据，
     支持产品搜索、价格监控、竞品分析等功能
     """
+
     
     @classmethod
     async def search_products(
@@ -77,8 +78,7 @@ class EcommerceAgent(BrowserTaskAgent):
             }
             
             # 执行任务
-            result = await cls.execute_category_task(
-                category=TemplateCategory.ECOMMERCE,
+            result = await cls.execute_task(
                 platform=platform,
                 task_type="search",
                 parameters=task_params,
@@ -150,7 +150,12 @@ class EcommerceAgent(BrowserTaskAgent):
                 """
                 
                 # 执行任务
-                result = await cls.execute_task(task, use_vision=use_vision)
+                result = await cls.execute_ecommerce_task(
+                    platform=platform,
+                    task_type="monitor_price",
+                    parameters={"product_urls": [url]},
+                    use_vision=use_vision
+                )
                 
                 if result["status"] == "success":
                     results.append({
@@ -222,7 +227,12 @@ class EcommerceAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_ecommerce_task(
+                platform=platform,
+                task_type="analyze_reviews",
+                parameters={"product_url": product_url, "review_count": review_count},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -295,7 +305,12 @@ class EcommerceAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_ecommerce_task(
+                platform=platform,
+                task_type="compare_products",
+                parameters={"product_urls": product_urls, "aspects": aspects},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -357,7 +372,12 @@ class EcommerceAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_ecommerce_task(
+                platform=platform,
+                task_type="analyze_sales",
+                parameters={"product_url": product_url},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -418,7 +438,12 @@ class EcommerceAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_ecommerce_task(
+                platform=platform,
+                task_type="find_top_sellers",
+                parameters={"category": category, "count": count},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 return cls.format_success_response(
@@ -469,10 +494,9 @@ class EcommerceAgent(BrowserTaskAgent):
             }
             
             # 执行任务
-            result = await cls.execute_category_task(
-                category=TemplateCategory.ECOMMERCE,
+            result = await cls.execute_ecommerce_task(
                 platform=platform,
-                task_type="extract",
+                task_type="extract_product_info",
                 parameters=params,
                 use_vision=use_vision
             )
@@ -538,7 +562,12 @@ class EcommerceAgent(BrowserTaskAgent):
             """
             
             # 执行任务
-            result = await cls.execute_task(task, use_vision=use_vision)
+            result = await cls.execute_ecommerce_task(
+                platform=platform,
+                task_type="track_listing",
+                parameters={"product_url": product_url, "check_interval": check_interval},
+                use_vision=use_vision
+            )
             
             if result["status"] == "success":
                 # 构造跟踪设置

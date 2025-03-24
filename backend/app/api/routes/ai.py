@@ -4,10 +4,19 @@ from app.models.api_models import (ChatRequest, ChatResponse, CompetitionAnalysi
 from app.models.api_models import(InspirationRequest, ListingGenerationRequest, ProductPotentialRequest, ProductSearchRequest, SentimentMonitorRequest)
 from app.models.api_models import(SimilarCreatorsRequest, SocialDataRequest, SupplierSearchRequest, TaskRequest, TaskResponse, TemplateTaskRequest, TrendingContentRequest)
 from app.models.api_models import StatusEnum, BaseResponse, DataResponse
-from ..dependencies.ai_dependencies import AIService, get_ai_service
 from typing import Optional, List, Dict, Any
 import logging
 from ...core.agents.chat.chat_agent import ChatAgent
+
+# 删除旧的AIService导入
+# from ...api.dependencies.ai_dependencies import AIService, get_ai_service
+
+# 保留专门的服务类和依赖函数导入
+from ...api.dependencies.ai_dependencies import (
+    ChatAIService, get_chat_service,
+    SocialAIService, get_social_service,
+    EcommerceAIService, get_ecommerce_service
+)
 
 # 配置日志
 logging.basicConfig(
@@ -28,14 +37,14 @@ router = APIRouter(
 @router.post("/chat", response_model=BaseResponse)
 async def chat(
     request: ChatRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    chat_service: ChatAIService = Depends(get_chat_service)
 ) -> Dict[str, Any]:
     """
     与AI聊天
     """
     try:
-        # 使用AIService中的chat方法
-        result = await ai_service.chat(request.message, request.session_id)
+        # 使用ChatAIService中的chat方法
+        result = await chat_service.chat(request.message, request.session_id)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"聊天处理错误: {str(e)}")
@@ -43,13 +52,13 @@ async def chat(
 @router.post("/task", response_model=BaseResponse)
 async def execute_task(
     request: TaskRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     执行通用任务
     """
     try:
-        result = await ai_service.execute_task(request.task, request.use_vision)
+        result = await social_service.execute_task(request.task, request.use_vision)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"任务执行错误: {str(e)}")
@@ -57,14 +66,14 @@ async def execute_task(
 @router.post("/task/template", response_model=TaskResponse)
 async def execute_template_task(
     request: TemplateTaskRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ):
     """
     使用预定义模板执行任务
     """
     try:
-        # 使用AIService执行模板任务
-        result = await ai_service.execute_template_task(
+        # 使用SocialAIService执行模板任务
+        result = await social_service.execute_template_task(
             template_name=request.template_name,
             parameters=request.parameters,
             use_vision=request.use_vision,
@@ -103,22 +112,36 @@ async def execute_template_task(
             }
         )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 社交媒体API
 @router.post("/social/collect", response_model=BaseResponse)
 async def collect_social_data(
     request: SocialDataRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     从社交媒体平台收集数据
     """
     try:
-        # 调用AIService收集社交数据
-        result = await ai_service.collect_social_data(
+        # 调用SocialAIService收集社交数据
+        result = await social_service.collect_from_platform(
             platform=request.platform,
             task_type=request.task_type,
             use_vision=request.use_vision,
-            **request.params
+            parameters=request.params
         )
         return result
     except Exception as e:
@@ -127,13 +150,13 @@ async def collect_social_data(
 @router.post("/social/monitor", response_model=BaseResponse)
 async def monitor_sentiment(
     request: SentimentMonitorRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     监控社交媒体舆情
     """
     try:
-        result = await ai_service.monitor_sentiment(
+        result = await social_service.monitor_sentiment(
             keywords=request.keywords,
             platforms=request.platforms
         )
@@ -144,13 +167,13 @@ async def monitor_sentiment(
 @router.post("/social/analyze", response_model=BaseResponse)
 async def analyze_social_data(
     request: DataAnalysisRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     分析社交媒体数据
     """
     try:
-        result = await ai_service.analyze_social_data(
+        result = await social_service.analyze_data(
             data=request.data,
             analysis_type=request.analysis_type
         )
@@ -161,13 +184,13 @@ async def analyze_social_data(
 @router.post("/social/trending", response_model=BaseResponse)
 async def find_trending_content(
     request: TrendingContentRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     查找热门内容
     """
     try:
-        result = await ai_service.find_trending_content(
+        result = await social_service.find_trending_content(
             platform=request.platform,
             niche=request.niche,
             count=request.count,
@@ -181,13 +204,13 @@ async def find_trending_content(
 @router.post("/social/similar-creators", response_model=BaseResponse)
 async def find_similar_creators(
     request: SimilarCreatorsRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ) -> Dict[str, Any]:
     """
     查找相似创作者
     """
     try:
-        result = await ai_service.find_similar_creators(
+        result = await social_service.find_similar_creators(
             platform=request.platform,
             creator=request.creator,
             count=request.count,
@@ -200,13 +223,13 @@ async def find_similar_creators(
 @router.post("/social/content-ideas", response_model=DataResponse)
 async def generate_content_ideas(
     request: ContentIdeasRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ):
     """
     生成内容创意
     """
     try:
-        result = await ai_service.generate_content_ideas(
+        result = await social_service.generate_content_ideas(
             platform=request.platform,
             niche=request.niche,
             keywords=request.keywords,
@@ -230,13 +253,13 @@ async def generate_content_ideas(
 @router.post("/social/creator-analysis", response_model=DataResponse)
 async def analyze_creator(
     request: CreatorAnalysisRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ):
     """
     分析创作者
     """
     try:
-        result = await ai_service.analyze_creator(
+        result = await social_service.analyze_creator(
             platform=request.platform,
             creator=request.creator,
             use_vision=request.use_vision
@@ -259,13 +282,13 @@ async def analyze_creator(
 @router.post("/social/inspiration", response_model=DataResponse)
 async def collect_inspiration(
     request: InspirationRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    social_service: SocialAIService = Depends(get_social_service)
 ):
     """
     收集灵感素材
     """
     try:
-        result = await ai_service.collect_inspiration(
+        result = await social_service.collect_inspiration(
             keywords=request.keywords,
             sources=request.sources,
             count_per_source=request.count_per_source,
@@ -286,21 +309,41 @@ async def collect_inspiration(
             }
         )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 电商API
 @router.post("/ecommerce/products", response_model=BaseResponse)
 async def search_products(
     request: ProductSearchRequest = Body(...),
-    ai_service: AIService = Depends(get_ai_service)
+    ecommerce_service: EcommerceAIService = Depends(get_ecommerce_service)
 ) -> Dict[str, Any]:
     """
     搜索电商产品
     """
     try:
-        result = await ai_service.search_products(
+        result = await ecommerce_service.search_products(
             platform=request.platform,
-            task_type=request.task_type,
+            query=request.query,
+            max_results=request.max_results,
+            sort_by=request.sort_by,
             use_vision=request.use_vision,
-            **request.params
+            filters=request.filters
         )
         return result
     except Exception as e:
@@ -309,13 +352,13 @@ async def search_products(
 @router.post("/ecommerce/listing", response_model=DataResponse)
 async def generate_listing(
     request: ListingGenerationRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    ecommerce_service: EcommerceAIService = Depends(get_ecommerce_service)
 ):
     """
     生成产品listing
     """
     try:
-        result = await ai_service.generate_listing(
+        result = await ecommerce_service.generate_listing(
             template_type=request.template_type,
             product=request.product,
             features=request.features,
@@ -342,13 +385,13 @@ async def generate_listing(
 @router.post("/ecommerce/product-potential", response_model=DataResponse)
 async def analyze_product_potential(
     request: ProductPotentialRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    ecommerce_service: EcommerceAIService = Depends(get_ecommerce_service)
 ):
     """
     分析产品潜力
     """
     try:
-        result = await ai_service.analyze_product_potential(
+        result = await ecommerce_service.analyze_product_potential(
             product_info=request.product_info,
             niche=request.niche,
             platform=request.platform,
@@ -372,13 +415,13 @@ async def analyze_product_potential(
 @router.post("/ecommerce/competition", response_model=DataResponse)
 async def analyze_competition(
     request: CompetitionAnalysisRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    ecommerce_service: EcommerceAIService = Depends(get_ecommerce_service)
 ):
     """
     分析竞争情况
     """
     try:
-        result = await ai_service.analyze_competition(
+        result = await ecommerce_service.analyze_competition(
             product_keyword=request.product_keyword,
             platform=request.platform,
             use_vision=request.use_vision
@@ -401,13 +444,13 @@ async def analyze_competition(
 @router.post("/ecommerce/suppliers", response_model=DataResponse)
 async def find_suppliers(
     request: SupplierSearchRequest,
-    ai_service: AIService = Depends(get_ai_service)
+    ecommerce_service: EcommerceAIService = Depends(get_ecommerce_service)
 ):
     """
     查找供应商
     """
     try:
-        result = await ai_service.find_suppliers(
+        result = await ecommerce_service.find_suppliers(
             product=request.product,
             count=request.count,
             use_vision=request.use_vision

@@ -135,9 +135,11 @@ class InspirationRequest(BaseModel):
 class ProductSearchRequest(BaseModel):
     """产品搜索请求"""
     platform: str = Field(..., description="电商平台")
-    task_type: str = Field(..., description="任务类型")
-    params: Dict[str, Any] = Field(..., description="搜索参数")
+    query: str = Field(..., description="搜索关键词")
+    max_results: int = Field(10, description="最大结果数量")
+    sort_by: str = Field("relevance", description="排序方式 (relevance, price_low, price_high, rating, sales)")
     use_vision: bool = Field(True, description="是否启用视觉能力")
+    filters: Optional[Dict[str, Any]] = Field(None, description="过滤条件 (如价格范围、品牌等)")
 
 class ListingGenerationRequest(BaseModel):
     """列表生成请求"""
